@@ -81,16 +81,26 @@ def create_resource(
 @app.get(
     "/api/resources",
     response_model=schemas.PaginatedResourceResponse,
-    summary="List resources with search and pagination",
-    description="Retrieve paginated resource entries with server-side search filtering across platform, type, username, status, or log."
+    summary="List resources with search, filters, sorting, and pagination",
+    description="Retrieve paginated resource entries with server-side search, platform filter, status filter, sorting options, and pagination."
 )
 def get_resources(
     search: Optional[str] = Query(None, description="Search term for platform, type, username, status, or log"),
+    platform: Optional[str] = Query(None, description="Filter by platform name"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (pending, done, error)"),
+    sort_by: Optional[str] = Query("id", description="Sort by field: id, created_at, platform, status, username"),
+    sort_order: Optional[str] = Query("desc", description="Sort order: asc, desc"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db)
 ):
     query = db.query(Resource)
+
+    if platform and platform.strip():
+        query = query.filter(Resource.platform.ilike(f"%{platform.strip()}%"))
+
+    if status_filter and status_filter.strip():
+        query = query.filter(Resource.status.ilike(f"%{status_filter.strip()}%"))
 
     if search and search.strip():
         term = f"%{search.strip().lower()}%"
@@ -104,11 +114,18 @@ def get_resources(
             )
         )
 
+    # Sorting logic
+    sort_field = getattr(Resource, sort_by, Resource.id) if sort_by in ["id", "created_at", "platform", "status", "username"] else Resource.id
+    if sort_order and sort_order.lower() == "asc":
+        query = query.order_by(sort_field.asc())
+    else:
+        query = query.order_by(sort_field.desc())
+
     total = query.count()
     total_pages = math.ceil(total / page_size) if total > 0 else 1
 
     offset = (page - 1) * page_size
-    items = query.order_by(Resource.id.desc()).offset(offset).limit(page_size).all()
+    items = query.offset(offset).limit(page_size).all()
 
     return schemas.PaginatedResourceResponse(
         items=items,
