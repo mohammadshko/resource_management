@@ -18,7 +18,6 @@ class ResourceStatusEnum(str, Enum):
     pending = "pending"
     done = "done"
     error = "error"
-    duplicated = "duplicated"
 
 class ResourceCreate(BaseModel):
     platform: PlatformEnum
