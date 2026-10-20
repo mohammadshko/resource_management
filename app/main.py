@@ -88,7 +88,7 @@ def create_resource(
 def get_resources(
     search: Optional[str] = Query(None, description="Search term for platform, type, username, status, or log"),
     platform: Optional[str] = Query(None, description="Filter by platform name"),
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (pending, done, error)"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (pending, done, error, duplicated)"),
     sort_by: Optional[str] = Query("id", description="Sort by field: id, created_at, platform, status, username"),
     sort_order: Optional[str] = Query("desc", description="Sort order: asc, desc"),
     page: int = Query(1, ge=1, description="Page number"),
