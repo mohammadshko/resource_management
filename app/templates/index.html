@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resource Management System</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Resource Management System</h1>
+            <div class="nav-links">
+                <a href="/docs" target="_blank">Swagger Docs</a>
+                <a href="/redoc" target="_blank">ReDoc</a>
+            </div>
+        </header>
+
+        <div class="grid">
+            <!-- Form Section -->
+            <div>
+                <div class="card">
+                    <h2>Submit New Resource</h2>
+                    <form id="resourceForm">
+                        <div class="form-group">
+                            <label for="platform">Platform</label>
+                            <input type="text" id="platform" name="platform" placeholder="e.g. GitHub, AWS, GCP, Azure" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="type">Resource Type</label>
+                            <input type="text" id="type" name="type" placeholder="e.g. repository, s3-bucket, vm-instance" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="username">Username / Owner</label>
+                            <input type="text" id="username" name="username" placeholder="e.g. dev_user123" required>
+                        </div>
+                        <button type="submit" class="btn">Submit Resource</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>Registered Platform Users</h2>
+                    <p style="font-size: 0.85rem; color: #666; margin-bottom: 10px;">
+                        Automatically updated when new usernames are ingested for a platform.
+                    </p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Platform</th>
+                                <th>Username</th>
+                            </tr>
+                        </thead>
+                        <tbody id="platformUsersTable">
+                            <tr><td colspan="3">Loading platform users...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Logs & Processing Section -->
+            <div>
+                <div class="card">
+                    <div class="actions-bar">
+                        <h2>Resource Processing Queue & Logs</h2>
+                        <button id="processAllBtn" class="btn btn-success">Process Pending Records</button>
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Platform / Type</th>
+                                <th>Username</th>
+                                <th>Status</th>
+                                <th>Time (s)</th>
+                                <th>Log / Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resourceLogsTable">
+                            <tr><td colspan="6">Loading resource logs...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchPlatformUsers() {
+            try {
+                const res = await fetch('/api/platform-users');
+                const users = await res.json();
+                const tbody = document.getElementById('platformUsersTable');
+                if (users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3">No platform users found.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = users.map(u => `
+                    <tr>
+                        <td>${u.id}</td>
+                        <td><strong>${u.platform}</strong></td>
+                        <td>${u.username}</td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to fetch platform users:', err);
+            }
+        }
+
+        async function fetchResourceLogs() {
+            try {
+                const res = await fetch('/api/resources');
+                const logs = await res.json();
+                const tbody = document.getElementById('resourceLogsTable');
+                if (logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6">No resource logs available.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = logs.map(l => {
+                    const statusClass = l.status === 'done' ? 'badge-done' : (l.status === 'error' ? 'badge-error' : 'badge-pending');
+                    const processTime = l.process_time !== null ? l.process_time + 's' : '-';
+                    const processBtn = l.status === 'pending' ?
+                        `<button class="btn btn-sm btn-success" onclick="processSingleLog(${l.id})">Process</button>` : '';
+                    return `
+                        <tr>
+                            <td>#${l.id}</td>
+                            <td><strong>${l.platform}</strong><br><small>${l.type}</small></td>
+                            <td>${l.username}</td>
+                            <td><span class="badge ${statusClass}">${l.status}</span></td>
+                            <td>${processTime}</td>
+                            <td>
+                                ${processBtn}
+                                ${l.log ? `<pre class="log-output">${l.log}</pre>` : ''}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error('Failed to fetch resource logs:', err);
+            }
+        }
+
+        document.getElementById('resourceForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const platform = document.getElementById('platform').value;
+            const type = document.getElementById('type').value;
+            const username = document.getElementById('username').value;
+
+            try {
+                const res = await fetch('/api/resources', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ platform, type, username })
+                });
+                if (res.ok) {
+                    document.getElementById('resourceForm').reset();
+                    fetchResourceLogs();
+                    fetchPlatformUsers();
+                } else {
+                    alert('Error creating resource log');
+                }
+            } catch (err) {
+                console.error('Submit error:', err);
+            }
+        });
+
+        async function processSingleLog(id) {
+            try {
+                const res = await fetch(`/api/resources/${id}/process`, { method: 'POST' });
+                if (res.ok) {
+                    fetchResourceLogs();
+                } else {
+                    alert('Error processing log entry');
+                }
+            } catch (err) {
+                console.error('Process error:', err);
+            }
+        }
+
+        document.getElementById('processAllBtn').addEventListener('click', async () => {
+            try {
+                const res = await fetch('/api/resources/process', { method: 'POST' });
+                if (res.ok) {
+                    fetchResourceLogs();
+                } else {
+                    alert('Error processing pending logs');
+                }
+            } catch (err) {
+                console.error('Process all error:', err);
+            }
+        });
+
+        // Initial load
+        fetchPlatformUsers();
+        fetchResourceLogs();
+    </script>
+</body>
+</html>
