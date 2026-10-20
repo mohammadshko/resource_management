@@ -26,8 +26,8 @@ class ResourceCreate(BaseModel):
 
 class ResourceResponse(BaseModel):
     id: int
-    platform: str
-    type: str
+    platform: PlatformEnum
+    type: ResourceTypeEnum
     username: str
     status: ResourceStatusEnum
     process_time: Optional[float] = None

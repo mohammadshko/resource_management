@@ -5,7 +5,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
-from sqlalchemy import or_
+from sqlalchemy import or_, String
 from sqlalchemy.orm import Session
 
 from app.database import engine, Base, get_db
@@ -52,11 +52,8 @@ def create_resource(
     resource: schemas.ResourceCreate,
     db: Session = Depends(get_db)
 ):
-    platform_val = resource.platform.value if hasattr(resource.platform, 'value') else str(resource.platform)
-    type_val = resource.type.value if hasattr(resource.type, 'value') else str(resource.type)
-
     existing = db.query(Resource).filter(
-        Resource.platform == platform_val,
+        Resource.platform == resource.platform,
         Resource.username == resource.username
     ).first()
 
@@ -66,10 +63,10 @@ def create_resource(
         return res
 
     new_resource = Resource(
-        platform=platform_val,
-        type=type_val,
+        platform=resource.platform,
+        type=resource.type,
         username=resource.username,
-        status="pending",
+        status=schemas.ResourceStatusEnum.pending,
         process_time=None,
         log=""
     )
@@ -101,19 +98,21 @@ def get_resources(
     query = db.query(Resource)
 
     if platform and platform.strip():
-        query = query.filter(Resource.platform.ilike(f"%{platform.strip()}%"))
+        p_str = platform.strip()
+        query = query.filter(Resource.platform.cast(String).ilike(f"%{p_str}%"))
 
     if status_filter and status_filter.strip():
-        query = query.filter(Resource.status.ilike(f"%{status_filter.strip()}%"))
+        s_str = status_filter.strip()
+        query = query.filter(Resource.status.cast(String).ilike(f"%{s_str}%"))
 
     if search and search.strip():
         term = f"%{search.strip().lower()}%"
         query = query.filter(
             or_(
-                Resource.platform.ilike(term),
-                Resource.type.ilike(term),
+                Resource.platform.cast(String).ilike(term),
+                Resource.type.cast(String).ilike(term),
                 Resource.username.ilike(term),
-                Resource.status.ilike(term),
+                Resource.status.cast(String).ilike(term),
                 Resource.log.ilike(term)
             )
         )
