@@ -18,78 +18,31 @@
             </div>
         </header>
 
-        <div class="grid">
+        <div style="max-width: 900px; margin: 0 auto;">
             <!-- Inserted Resources List -->
-            <div>
-                <div class="card">
-                    <h2>Inserted Resources</h2>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Platform</th>
-                                <th>Type</th>
-                                <th>Username</th>
-                                <th>Status</th>
-                                <th>Process Time</th>
-                                <th>Log</th>
-                            </tr>
-                        </thead>
-                        <tbody id="resourceLogsTable">
-                            <tr><td colspan="7">Loading inserted resources...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Platform Users Database -->
-            <div>
-                <div class="card">
-                    <h2>Platform Database Users</h2>
-                    <p style="font-size: 0.85rem; color: #666; margin-bottom: 10px;">
-                        Stores unique usernames searched and checked per platform.
-                    </p>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Platform</th>
-                                <th>Username</th>
-                                <th>Created At</th>
-                            </tr>
-                        </thead>
-                        <tbody id="platformUsersTable">
-                            <tr><td colspan="4">Loading platform users...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+            <div class="card">
+                <h2>Inserted Resources</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Platform</th>
+                            <th>Type</th>
+                            <th>Username</th>
+                            <th>Status</th>
+                            <th>Process Time</th>
+                            <th>Log</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resourceLogsTable">
+                        <tr><td colspan="7">Loading inserted resources...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 
     <script>
-        async function fetchPlatformUsers() {
-            try {
-                const res = await fetch('/api/platform-users');
-                const users = await res.json();
-                const tbody = document.getElementById('platformUsersTable');
-                if (users.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4">No platform users registered yet.</td></tr>';
-                    return;
-                }
-                tbody.innerHTML = users.map(u => `
-                    <tr>
-                        <td>#${u.id}</td>
-                        <td><strong>${u.platform}</strong></td>
-                        <td>${u.username}</td>
-                        <td>${new Date(u.created_at).toLocaleString()}</td>
-                    </tr>
-                `).join('');
-            } catch (err) {
-                console.error('Failed to fetch platform users:', err);
-            }
-        }
-
         async function fetchResourceLogs() {
             try {
                 const res = await fetch('/api/resources');
@@ -120,7 +73,6 @@
             }
         }
 
-        fetchPlatformUsers();
         fetchResourceLogs();
     </script>
 </body>
