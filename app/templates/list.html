@@ -7,21 +7,32 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Resource Management System</h1>
+    <header>
+        <div class="header-content">
+            <div class="brand">
+                <div class="brand-icon">R</div>
+                <h1>Resource Management System</h1>
+            </div>
             <div class="nav-links">
                 <a href="/">Submit Form</a>
-                <a href="/list">Inserted Data</a>
+                <a href="/list" class="active">Inserted Data</a>
                 <a href="/docs" target="_blank">Swagger Docs</a>
                 <a href="/redoc" target="_blank">ReDoc</a>
             </div>
-        </header>
+        </div>
+    </header>
 
-        <div style="max-width: 900px; margin: 0 auto;">
-            <!-- Inserted Resources List -->
-            <div class="card">
+    <div class="container-fluid" style="padding-top: 10px;">
+        <div class="card">
+            <div class="card-header">
                 <h2>Inserted Resources</h2>
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="searchInput" placeholder="Search by platform, type, username, status...">
+                </div>
+            </div>
+
+            <div class="full-screen-table-container">
                 <table>
                     <thead>
                         <tr>
@@ -43,35 +54,59 @@
     </div>
 
     <script>
+        let allResources = [];
+
+        function renderResources(resources) {
+            const tbody = document.getElementById('resourceLogsTable');
+            if (resources.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #64748b; padding: 20px;">No matching resources found.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = resources.map(l => {
+                const statusClass = l.status === 'done' ? 'badge-done' : (l.status === 'error' ? 'badge-error' : 'badge-pending');
+                const processTime = l.process_time !== null ? l.process_time + 's' : 'None';
+                const logDisplay = l.log ? `<pre class="log-output">${l.log}</pre>` : '<span style="color: #94a3b8; font-style: italic;">Empty</span>';
+                return `
+                    <tr>
+                        <td>#${l.id}</td>
+                        <td><strong>${l.platform}</strong></td>
+                        <td>${l.type}</td>
+                        <td>${l.username}</td>
+                        <td><span class="badge ${statusClass}">${l.status}</span></td>
+                        <td>${processTime}</td>
+                        <td>${logDisplay}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
         async function fetchResourceLogs() {
             try {
                 const res = await fetch('/api/resources');
-                const logs = await res.json();
-                const tbody = document.getElementById('resourceLogsTable');
-                if (logs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7">No resources inserted yet.</td></tr>';
-                    return;
-                }
-                tbody.innerHTML = logs.map(l => {
-                    const statusClass = l.status === 'done' ? 'badge-done' : (l.status === 'error' ? 'badge-error' : 'badge-pending');
-                    const processTime = l.process_time !== null ? l.process_time + 's' : 'None';
-                    const logDisplay = l.log ? `<pre class="log-output">${l.log}</pre>` : '<span style="color: #888; font-style: italic;">Empty</span>';
-                    return `
-                        <tr>
-                            <td>#${l.id}</td>
-                            <td><strong>${l.platform}</strong></td>
-                            <td>${l.type}</td>
-                            <td>${l.username}</td>
-                            <td><span class="badge ${statusClass}">${l.status}</span></td>
-                            <td>${processTime}</td>
-                            <td>${logDisplay}</td>
-                        </tr>
-                    `;
-                }).join('');
+                allResources = await res.json();
+                renderResources(allResources);
             } catch (err) {
                 console.error('Failed to fetch resource logs:', err);
+                document.getElementById('resourceLogsTable').innerHTML =
+                    '<tr><td colspan="7" style="text-align: center; color: #ef4444;">Failed to load data from server.</td></tr>';
             }
         }
+
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            if (!query) {
+                renderResources(allResources);
+                return;
+            }
+            const filtered = allResources.filter(r =>
+                r.platform.toLowerCase().includes(query) ||
+                r.type.toLowerCase().includes(query) ||
+                r.username.toLowerCase().includes(query) ||
+                r.status.toLowerCase().includes(query) ||
+                (r.log && r.log.toLowerCase().includes(query))
+            );
+            renderResources(filtered);
+        });
 
         fetchResourceLogs();
     </script>
