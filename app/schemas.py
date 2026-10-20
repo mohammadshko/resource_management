@@ -14,6 +14,12 @@ class ResourceTypeEnum(str, Enum):
     channel = "channel"
     group = "group"
 
+class ResourceStatusEnum(str, Enum):
+    pending = "pending"
+    done = "done"
+    error = "error"
+    duplicated = "duplicated"
+
 class ResourceCreate(BaseModel):
     platform: PlatformEnum
     type: ResourceTypeEnum
@@ -24,7 +30,7 @@ class ResourceResponse(BaseModel):
     platform: str
     type: str
     username: str
-    status: str
+    status: ResourceStatusEnum
     process_time: Optional[float] = None
     log: Optional[str] = None
     created_at: datetime

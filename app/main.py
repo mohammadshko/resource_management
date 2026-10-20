@@ -45,8 +45,8 @@ def get_list_page(request: Request):
     "/api/resources",
     response_model=schemas.ResourceResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Get resource data and insert if missing",
-    description="Accepts resource data (platform enum, type enum ['channel', 'group'], username). Checks database for username per platform and inserts new row if missing."
+    summary="Get resource data and insert if missing, or record as duplicated",
+    description="Accepts resource data (platform enum, type enum ['channel', 'group'], username). Checks database for username per platform; if missing, inserts new row with status 'pending'; if existing, inserts entry with status 'duplicated'."
 )
 def create_resource(
     resource: schemas.ResourceCreate,
@@ -60,14 +60,13 @@ def create_resource(
         Resource.username == resource.username
     ).first()
 
-    if existing:
-        return existing
+    status_val = "duplicated" if existing else "pending"
 
     new_resource = Resource(
         platform=platform_val,
         type=type_val,
         username=resource.username,
-        status="pending",
+        status=status_val,
         process_time=None,
         log=""
     )
@@ -87,7 +86,7 @@ def create_resource(
 def get_resources(
     search: Optional[str] = Query(None, description="Search term for platform, type, username, status, or log"),
     platform: Optional[str] = Query(None, description="Filter by platform name"),
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (pending, done, error)"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (pending, done, error, duplicated)"),
     sort_by: Optional[str] = Query("id", description="Sort by field: id, created_at, platform, status, username"),
     sort_order: Optional[str] = Query("desc", description="Sort order: asc, desc"),
     page: int = Query(1, ge=1, description="Page number"),

@@ -89,6 +89,7 @@
                             <option value="pending">Pending</option>
                             <option value="done">Done</option>
                             <option value="error">Error</option>
+                            <option value="duplicated">Duplicated</option>
                         </select>
                     </div>
 
@@ -176,7 +177,7 @@
             tbody.innerHTML = items.map((l, idx) => {
                 const globalIndex = (page - 1) * pageSize + idx;
                 const logoHtml = platformLogos[l.platform] || `<span class="badge" style="background:#e2e8f0; color:#334155;">${l.platform}</span>`;
-                const statusClass = l.status === 'done' ? 'badge-done' : (l.status === 'error' ? 'badge-error' : 'badge-pending');
+                const statusClass = l.status === 'done' ? 'badge-done' : (l.status === 'error' ? 'badge-error' : (l.status === 'duplicated' ? 'badge-duplicated' : 'badge-pending'));
                 const processTime = l.process_time !== null ? l.process_time + 's' : 'None';
                 const logDisplay = l.log ? `<pre class="log-output">${l.log}</pre>` : '<span style="color: #94a3b8; font-style: italic;">Empty</span>';
                 return `

@@ -31,7 +31,7 @@ def setup_db():
 
 client = TestClient(app)
 
-def test_create_resource_and_check_existing():
+def test_create_resource_and_duplicate_entry():
     response = client.post(
         "/api/resources",
         json={"platform": "Telegram", "type": "channel", "username": "channel_user_1"}
@@ -41,14 +41,21 @@ def test_create_resource_and_check_existing():
     assert data["platform"] == "Telegram"
     assert data["type"] == "channel"
     assert data["username"] == "channel_user_1"
+    assert data["status"] == "pending"
 
-    # Duplicate submission
+    # Duplicate submission inserts new entry with status 'duplicated'
     response2 = client.post(
         "/api/resources",
         json={"platform": "Telegram", "type": "group", "username": "channel_user_1"}
     )
     assert response2.status_code == 201
-    assert response2.json()["id"] == data["id"]
+    data2 = response2.json()
+    assert data2["id"] != data["id"]
+    assert data2["status"] == "duplicated"
+
+    # Verify 2 entries in total (1 pending, 1 duplicated)
+    list_resp = client.get("/api/resources")
+    assert list_resp.json()["total"] == 2
 
 
 def test_invalid_resource_type():
@@ -93,6 +100,7 @@ def test_ui_page_routes():
     assert res_list.status_code == 200
     assert "Platform:" in res_list.text
     assert "Status:" in res_list.text
+    assert "Duplicated" in res_list.text
 
     res_docs = client.get("/docs")
     assert res_docs.status_code == 200
