@@ -13,8 +13,8 @@ class ResourceLog(Base):
     type = Column(String, nullable=False)
     username = Column(String, index=True, nullable=False)
     status = Column(String, default="pending", nullable=False)  # pending, done, error
-    process_time = Column(Float, nullable=True)  # in seconds
-    log = Column(Text, nullable=True)
+    process_time = Column(Float, nullable=True)  # in seconds, updated by operator/db
+    log = Column(Text, nullable=True)  # log messages, empty on insert
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 

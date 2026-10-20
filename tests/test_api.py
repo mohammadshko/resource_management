@@ -5,7 +5,6 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import ResourceLog, PlatformUser
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 
@@ -32,75 +31,61 @@ def setup_db():
 
 client = TestClient(app)
 
-def test_create_resource_and_platform_user_search():
-    # 1. Create a new resource
+def test_create_resource_with_enums_and_check_platform_user():
+    # 1. Create a valid resource (Telegram, channel)
     response = client.post(
         "/api/resources",
-        json={"platform": "github", "type": "repo", "username": "user1"}
+        json={"platform": "Telegram", "type": "channel", "username": "channel_user_1"}
     )
     assert response.status_code == 201
     data = response.json()
-    assert data["platform"] == "github"
-    assert data["username"] == "user1"
+    assert data["platform"] == "Telegram"
+    assert data["type"] == "channel"
+    assert data["username"] == "channel_user_1"
     assert data["status"] == "pending"
+    assert data["process_time"] is None
+    assert data["log"] == ""
 
     # Verify platform user was inserted
     users_resp = client.get("/api/platform-users")
     assert users_resp.status_code == 200
     users = users_resp.json()
     assert len(users) == 1
-    assert users[0]["platform"] == "github"
-    assert users[0]["username"] == "user1"
+    assert users[0]["platform"] == "Telegram"
+    assert users[0]["username"] == "channel_user_1"
 
-    # 2. Add another resource with same platform and username
+    # 2. Add another resource with same platform and username (type: group)
     response2 = client.post(
         "/api/resources",
-        json={"platform": "github", "type": "gist", "username": "user1"}
+        json={"platform": "Telegram", "type": "group", "username": "channel_user_1"}
     )
     assert response2.status_code == 201
+    assert response2.json()["type"] == "group"
 
     # Verify platform user count is still 1 (no duplicate inserted)
     users_resp2 = client.get("/api/platform-users")
     assert len(users_resp2.json()) == 1
 
 
-def test_process_resources_done_and_error():
-    # Create two resources (one normal, one with 'error' in username)
-    client.post("/api/resources", json={"platform": "aws", "type": "s3", "username": "normal_user"})
-    client.post("/api/resources", json={"platform": "aws", "type": "ec2", "username": "error_user"})
-
-    # Process pending resources
-    proc_resp = client.post("/api/resources/process")
-    assert proc_resp.status_code == 200
-    processed = proc_resp.json()
-    assert len(processed) == 2
-
-    # Check statuses
-    statuses = {item["username"]: item for item in processed}
-    assert statuses["normal_user"]["status"] == "done"
-    assert statuses["normal_user"]["process_time"] is not None
-    assert statuses["normal_user"]["process_time"] > 0
-
-    assert statuses["error_user"]["status"] == "error"
-    assert "Processing error" in statuses["error_user"]["log"]
+def test_invalid_resource_type():
+    # Only channel and group are valid types
+    response = client.post(
+        "/api/resources",
+        json={"platform": "Telegram", "type": "invalid_type", "username": "user1"}
+    )
+    assert response.status_code == 422
 
 
-def test_process_resource_by_id():
-    res = client.post("/api/resources", json={"platform": "gcp", "type": "storage", "username": "gcp_user"})
-    log_id = res.json()["id"]
+def test_ui_page_routes():
+    res_submit = client.get("/")
+    assert res_submit.status_code == 200
+    assert "Submit New Resource" in res_submit.text
+    assert "channel" in res_submit.text
+    assert "group" in res_submit.text
 
-    proc_res = client.post(f"/api/resources/{log_id}/process")
-    assert proc_res.status_code == 200
-    data = proc_res.json()
-    assert data["id"] == log_id
-    assert data["status"] == "done"
-    assert data["process_time"] is not None
-
-
-def test_ui_and_docs_endpoints():
-    res_ui = client.get("/")
-    assert res_ui.status_code == 200
-    assert "Resource Management System" in res_ui.text
+    res_list = client.get("/list")
+    assert res_list.status_code == 200
+    assert "Inserted Resources" in res_list.text
 
     res_docs = client.get("/docs")
     assert res_docs.status_code == 200

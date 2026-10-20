@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inserted Data - Resource Management</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Resource Management System</h1>
+            <div class="nav-links">
+                <a href="/">Submit Form</a>
+                <a href="/list">Inserted Data</a>
+                <a href="/docs" target="_blank">Swagger Docs</a>
+                <a href="/redoc" target="_blank">ReDoc</a>
+            </div>
+        </header>
+
+        <div class="grid">
+            <!-- Inserted Resources List -->
+            <div>
+                <div class="card">
+                    <h2>Inserted Resources</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Platform</th>
+                                <th>Type</th>
+                                <th>Username</th>
+                                <th>Status</th>
+                                <th>Process Time</th>
+                                <th>Log</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resourceLogsTable">
+                            <tr><td colspan="7">Loading inserted resources...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Platform Users Database -->
+            <div>
+                <div class="card">
+                    <h2>Platform Database Users</h2>
+                    <p style="font-size: 0.85rem; color: #666; margin-bottom: 10px;">
+                        Stores unique usernames searched and checked per platform.
+                    </p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Platform</th>
+                                <th>Username</th>
+                                <th>Created At</th>
+                            </tr>
+                        </thead>
+                        <tbody id="platformUsersTable">
+                            <tr><td colspan="4">Loading platform users...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchPlatformUsers() {
+            try {
+                const res = await fetch('/api/platform-users');
+                const users = await res.json();
+                const tbody = document.getElementById('platformUsersTable');
+                if (users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4">No platform users registered yet.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = users.map(u => `
+                    <tr>
+                        <td>#${u.id}</td>
+                        <td><strong>${u.platform}</strong></td>
+                        <td>${u.username}</td>
+                        <td>${new Date(u.created_at).toLocaleString()}</td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to fetch platform users:', err);
+            }
+        }
+
+        async function fetchResourceLogs() {
+            try {
+                const res = await fetch('/api/resources');
+                const logs = await res.json();
+                const tbody = document.getElementById('resourceLogsTable');
+                if (logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7">No resources inserted yet.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = logs.map(l => {
+                    const statusClass = l.status === 'done' ? 'badge-done' : (l.status === 'error' ? 'badge-error' : 'badge-pending');
+                    const processTime = l.process_time !== null ? l.process_time + 's' : 'None';
+                    const logDisplay = l.log ? `<pre class="log-output">${l.log}</pre>` : '<span style="color: #888; font-style: italic;">Empty</span>';
+                    return `
+                        <tr>
+                            <td>#${l.id}</td>
+                            <td><strong>${l.platform}</strong></td>
+                            <td>${l.type}</td>
+                            <td>${l.username}</td>
+                            <td><span class="badge ${statusClass}">${l.status}</span></td>
+                            <td>${processTime}</td>
+                            <td>${logDisplay}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error('Failed to fetch resource logs:', err);
+            }
+        }
+
+        fetchPlatformUsers();
+        fetchResourceLogs();
+    </script>
+</body>
+</html>

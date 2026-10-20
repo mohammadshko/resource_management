@@ -19,7 +19,7 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Resource Management API",
-    description="API for ingesting resource requests, searching platform databases, and processing logs manually.",
+    description="API for ingesting resource requests, searching platform databases, and managing logs.",
     version="1.0.0",
 )
 
@@ -28,10 +28,14 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
 
-# UI Route
+# UI Routes
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
-def get_ui(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html")
+def get_submit_page(request: Request):
+    return templates.TemplateResponse(request=request, name="submit.html")
+
+@app.get("/list", response_class=HTMLResponse, include_in_schema=False)
+def get_list_page(request: Request):
+    return templates.TemplateResponse(request=request, name="list.html")
 
 
 # API Endpoints
@@ -41,128 +45,44 @@ def get_ui(request: Request):
     response_model=schemas.ResourceLogResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create resource log and check platform user",
-    description="Accepts resource data (platform, type, username). Searches platform database for username; if missing, inserts new row. Then saves log entry with status 'pending'."
+    description="Accepts resource data (platform enum, type enum ['channel', 'group'], username). Searches platform database for username; if missing, inserts new row. Saves log entry with status 'pending' and empty log."
 )
 def create_resource(
     resource: schemas.ResourceCreate,
     db: Session = Depends(get_db)
 ):
+    platform_val = resource.platform.value if hasattr(resource.platform, 'value') else str(resource.platform)
+    type_val = resource.type.value if hasattr(resource.type, 'value') else str(resource.type)
+
     # Check platform user database
     platform_user = db.query(PlatformUser).filter(
-        PlatformUser.platform == resource.platform,
+        PlatformUser.platform == platform_val,
         PlatformUser.username == resource.username
     ).first()
 
     if not platform_user:
         platform_user = PlatformUser(
-            platform=resource.platform,
+            platform=platform_val,
             username=resource.username
         )
         db.add(platform_user)
         db.commit()
         db.refresh(platform_user)
 
-    # Save resource log with 'pending' status
+    # Save resource log with 'pending' status, empty log and empty process_time
     log_entry = ResourceLog(
-        platform=resource.platform,
-        type=resource.type,
+        platform=platform_val,
+        type=type_val,
         username=resource.username,
         status="pending",
-        log=f"Resource request created for {resource.username} on platform {resource.platform} (type: {resource.type})"
+        process_time=None,
+        log=""
     )
     db.add(log_entry)
     db.commit()
     db.refresh(log_entry)
 
     return log_entry
-
-
-@app.post(
-    "/api/resources/process",
-    response_model=List[schemas.ResourceLogResponse],
-    summary="Process pending resource logs manually",
-    description="Fetches pending logs (or specified list of IDs) from database, processes them, calculates process time, and updates status to 'done' or 'error'."
-)
-def process_resources(
-    batch_req: Optional[schemas.ProcessBatchRequest] = None,
-    db: Session = Depends(get_db)
-):
-    query = db.query(ResourceLog)
-    if batch_req and batch_req.ids:
-        logs_to_process = query.filter(ResourceLog.id.in_(batch_req.ids)).all()
-    else:
-        logs_to_process = query.filter(ResourceLog.status == "pending").all()
-
-    processed_logs = []
-    for log_item in logs_to_process:
-        start_time = time.time()
-        try:
-            # Simulate processing logic for resource
-            # If username contains 'error' or 'fail', simulate an error state
-            if "error" in log_item.username.lower() or "fail" in log_item.username.lower():
-                raise ValueError(f"Failed to process resource for {log_item.username} on {log_item.platform}")
-
-            # Successful processing simulation
-            time.sleep(0.05)  # slight delay to record meaningful process time
-            elapsed = round(time.time() - start_time, 4)
-
-            log_item.status = "done"
-            log_item.process_time = elapsed
-            log_item.log = (log_item.log or "") + f"\n[{utc_now().isoformat()}] Processing completed successfully. Duration: {elapsed}s."
-        except Exception as e:
-            elapsed = round(time.time() - start_time, 4)
-            log_item.status = "error"
-            log_item.process_time = elapsed
-            log_item.log = (log_item.log or "") + f"\n[{utc_now().isoformat()}] Processing error: {str(e)}"
-
-        log_item.updated_at = utc_now()
-        db.add(log_item)
-        processed_logs.append(log_item)
-
-    db.commit()
-    for item in processed_logs:
-        db.refresh(item)
-
-    return processed_logs
-
-
-@app.post(
-    "/api/resources/{resource_id}/process",
-    response_model=schemas.ResourceLogResponse,
-    summary="Process a specific resource log manually by ID",
-    description="Processes a single resource log entry by ID, updates process_time, status ('done' or 'error'), and log messages."
-)
-def process_resource_by_id(
-    resource_id: int,
-    db: Session = Depends(get_db)
-):
-    log_item = db.query(ResourceLog).filter(ResourceLog.id == resource_id).first()
-    if not log_item:
-        raise HTTPException(status_code=404, detail="Resource log entry not found")
-
-    start_time = time.time()
-    try:
-        if "error" in log_item.username.lower() or "fail" in log_item.username.lower():
-            raise ValueError(f"Failed to process resource for {log_item.username} on {log_item.platform}")
-
-        time.sleep(0.05)
-        elapsed = round(time.time() - start_time, 4)
-
-        log_item.status = "done"
-        log_item.process_time = elapsed
-        log_item.log = (log_item.log or "") + f"\n[{utc_now().isoformat()}] Manual processing completed. Duration: {elapsed}s."
-    except Exception as e:
-        elapsed = round(time.time() - start_time, 4)
-        log_item.status = "error"
-        log_item.process_time = elapsed
-        log_item.log = (log_item.log or "") + f"\n[{utc_now().isoformat()}] Manual processing error: {str(e)}"
-
-    log_item.updated_at = utc_now()
-    db.add(log_item)
-    db.commit()
-    db.refresh(log_item)
-
-    return log_item
 
 
 @app.get(

@@ -1,10 +1,22 @@
+from enum import Enum
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict
 
+class PlatformEnum(str, Enum):
+    telegram = "Telegram"
+    twitter = "Twitter"
+    instagram = "Instagram"
+    youtube = "YouTube"
+    discord = "Discord"
+
+class ResourceTypeEnum(str, Enum):
+    channel = "channel"
+    group = "group"
+
 class ResourceCreate(BaseModel):
-    platform: str
-    type: str
+    platform: PlatformEnum
+    type: ResourceTypeEnum
     username: str
 
 class ResourceProcessResponse(BaseModel):
@@ -42,4 +54,4 @@ class PlatformUserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class ProcessBatchRequest(BaseModel):
-    ids: Optional[List[int]] = None  # If None or empty, process all pending records
+    ids: Optional[List[int]] = None
