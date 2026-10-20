@@ -252,11 +252,6 @@ tr:hover td {
     color: #991b1b;
 }
 
-.badge-duplicated {
-    background: #e0e7ff;
-    color: #3730a3;
-}
-
 pre.log-output {
     background: #0f172a;
     color: #38bdf8;

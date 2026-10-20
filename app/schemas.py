@@ -18,7 +18,6 @@ class ResourceStatusEnum(str, Enum):
     pending = "pending"
     done = "done"
     error = "error"
-    duplicated = "duplicated"
 
 class ResourceCreate(BaseModel):
     platform: PlatformEnum
@@ -35,6 +34,7 @@ class ResourceResponse(BaseModel):
     log: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    is_duplicate: Optional[bool] = False
 
     model_config = ConfigDict(from_attributes=True)
 

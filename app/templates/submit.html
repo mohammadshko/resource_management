@@ -73,11 +73,18 @@
                 });
 
                 if (res.ok) {
+                    const data = await res.json();
                     alertBox.style.display = 'block';
-                    alertBox.style.backgroundColor = '#d1fae5';
-                    alertBox.style.color = '#065f46';
-                    alertBox.textContent = `Successfully submitted resource for ${username} on ${platform}!`;
-                    document.getElementById('resourceForm').reset();
+                    if (data.is_duplicate) {
+                        alertBox.style.backgroundColor = '#fef3c7';
+                        alertBox.style.color = '#92400e';
+                        alertBox.textContent = `Warning: Duplicate resource entry already exists in database for ${username} on ${platform}! (No new row inserted)`;
+                    } else {
+                        alertBox.style.backgroundColor = '#d1fae5';
+                        alertBox.style.color = '#065f46';
+                        alertBox.textContent = `Successfully submitted resource for ${username} on ${platform}!`;
+                        document.getElementById('resourceForm').reset();
+                    }
                 } else {
                     const errData = await res.json();
                     alertBox.style.display = 'block';
