@@ -28,7 +28,7 @@
                 <h2>Inserted Resources</h2>
                 <div class="search-box">
                     <span class="search-icon">🔍</span>
-                    <input type="text" id="searchInput" placeholder="Search by platform, type, username, status...">
+                    <input type="text" id="searchInput" placeholder="Search API (platform, type, username, status)...">
                 </div>
             </div>
 
@@ -50,19 +50,42 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- Pagination Bar -->
+            <div class="pagination-container">
+                <div class="pagination-info">
+                    Showing <span id="showingStart">0</span> to <span id="showingEnd">0</span> of <span id="totalItems">0</span> items
+                    (Page <span id="currentPage">1</span> of <span id="totalPages">1</span>)
+                </div>
+
+                <div class="pagination-controls">
+                    <label for="pageSizeSelect" style="margin-right: 5px;">Per page:</label>
+                    <select id="pageSizeSelect" class="pageSize-select">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                    </select>
+
+                    <button id="prevBtn" class="pagination-btn" disabled>&laquo; Previous</button>
+                    <button id="nextBtn" class="pagination-btn" disabled>Next &raquo;</button>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
-        let allResources = [];
+        let currentPage = 1;
+        let currentPageSize = 10;
+        let searchTimeout = null;
 
-        function renderResources(resources) {
+        function renderTable(items) {
             const tbody = document.getElementById('resourceLogsTable');
-            if (resources.length === 0) {
+            if (!items || items.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #64748b; padding: 20px;">No matching resources found.</td></tr>';
                 return;
             }
-            tbody.innerHTML = resources.map(l => {
+            tbody.innerHTML = items.map(l => {
                 const statusClass = l.status === 'done' ? 'badge-done' : (l.status === 'error' ? 'badge-error' : 'badge-pending');
                 const processTime = l.process_time !== null ? l.process_time + 's' : 'None';
                 const logDisplay = l.log ? `<pre class="log-output">${l.log}</pre>` : '<span style="color: #94a3b8; font-style: italic;">Empty</span>';
@@ -81,33 +104,71 @@
         }
 
         async function fetchResourceLogs() {
+            const searchTerm = document.getElementById('searchInput').value.trim();
+            const params = new URLSearchParams({
+                page: currentPage,
+                page_size: currentPageSize
+            });
+            if (searchTerm) {
+                params.append('search', searchTerm);
+            }
+
             try {
-                const res = await fetch('/api/resources');
-                allResources = await res.json();
-                renderResources(allResources);
+                const res = await fetch(`/api/resources?${params.toString()}`);
+                const data = await res.json();
+
+                renderTable(data.items);
+
+                // Update pagination controls
+                document.getElementById('totalItems').textContent = data.total;
+                document.getElementById('currentPage').textContent = data.page;
+                document.getElementById('totalPages').textContent = data.total_pages;
+
+                const start = data.total === 0 ? 0 : (data.page - 1) * data.page_size + 1;
+                const end = Math.min(data.page * data.page_size, data.total);
+                document.getElementById('showingStart').textContent = start;
+                document.getElementById('showingEnd').textContent = end;
+
+                document.getElementById('prevBtn').disabled = data.page <= 1;
+                document.getElementById('nextBtn').disabled = data.page >= data.total_pages;
             } catch (err) {
-                console.error('Failed to fetch resource logs:', err);
+                console.error('Failed to fetch resources from API:', err);
                 document.getElementById('resourceLogsTable').innerHTML =
                     '<tr><td colspan="7" style="text-align: center; color: #ef4444;">Failed to load data from server.</td></tr>';
             }
         }
 
-        document.getElementById('searchInput').addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase().trim();
-            if (!query) {
-                renderResources(allResources);
-                return;
-            }
-            const filtered = allResources.filter(r =>
-                r.platform.toLowerCase().includes(query) ||
-                r.type.toLowerCase().includes(query) ||
-                r.username.toLowerCase().includes(query) ||
-                r.status.toLowerCase().includes(query) ||
-                (r.log && r.log.toLowerCase().includes(query))
-            );
-            renderResources(filtered);
+        // Search debouncing
+        document.getElementById('searchInput').addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                currentPage = 1;
+                fetchResourceLogs();
+            }, 300);
         });
 
+        // Page size selection
+        document.getElementById('pageSizeSelect').addEventListener('change', (e) => {
+            currentPageSize = parseInt(e.target.value, 10);
+            currentPage = 1;
+            fetchResourceLogs();
+        });
+
+        // Previous button
+        document.getElementById('prevBtn').addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                fetchResourceLogs();
+            }
+        });
+
+        // Next button
+        document.getElementById('nextBtn').addEventListener('click', () => {
+            currentPage++;
+            fetchResourceLogs();
+        });
+
+        // Initial load
         fetchResourceLogs();
     </script>
 </body>

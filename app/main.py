@@ -1,14 +1,15 @@
-import time
+import math
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import engine, Base, get_db
-from app.models import ResourceLog, PlatformUser
+from app.models import Resource
 from app import schemas
 
 def utc_now():
@@ -19,7 +20,7 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Resource Management API",
-    description="API for ingesting resource requests, searching platform databases, and managing logs.",
+    description="API for ingesting resource requests, managing resources, status, process_time, and logs.",
     version="1.0.0",
 )
 
@@ -42,10 +43,10 @@ def get_list_page(request: Request):
 
 @app.post(
     "/api/resources",
-    response_model=schemas.ResourceLogResponse,
+    response_model=schemas.ResourceResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create resource log and check platform user",
-    description="Accepts resource data (platform enum, type enum ['channel', 'group'], username). Searches platform database for username; if missing, inserts new row. Saves log entry with status 'pending' and empty log."
+    summary="Get resource data and insert if missing",
+    description="Accepts resource data (platform enum, type enum ['channel', 'group'], username). Checks database for username per platform and inserts new row if missing."
 )
 def create_resource(
     resource: schemas.ResourceCreate,
@@ -54,23 +55,15 @@ def create_resource(
     platform_val = resource.platform.value if hasattr(resource.platform, 'value') else str(resource.platform)
     type_val = resource.type.value if hasattr(resource.type, 'value') else str(resource.type)
 
-    # Check platform user database
-    platform_user = db.query(PlatformUser).filter(
-        PlatformUser.platform == platform_val,
-        PlatformUser.username == resource.username
+    existing = db.query(Resource).filter(
+        Resource.platform == platform_val,
+        Resource.username == resource.username
     ).first()
 
-    if not platform_user:
-        platform_user = PlatformUser(
-            platform=platform_val,
-            username=resource.username
-        )
-        db.add(platform_user)
-        db.commit()
-        db.refresh(platform_user)
+    if existing:
+        return existing
 
-    # Save resource log with 'pending' status, empty log and empty process_time
-    log_entry = ResourceLog(
+    new_resource = Resource(
         platform=platform_val,
         type=type_val,
         username=resource.username,
@@ -78,43 +71,49 @@ def create_resource(
         process_time=None,
         log=""
     )
-    db.add(log_entry)
+    db.add(new_resource)
     db.commit()
-    db.refresh(log_entry)
+    db.refresh(new_resource)
 
-    return log_entry
+    return new_resource
 
 
 @app.get(
     "/api/resources",
-    response_model=List[schemas.ResourceLogResponse],
-    summary="List resource logs",
-    description="Retrieve all resource log entries, optionally filtered by status or platform."
+    response_model=schemas.PaginatedResourceResponse,
+    summary="List resources with search and pagination",
+    description="Retrieve paginated resource entries with server-side search filtering across platform, type, username, status, or log."
 )
 def get_resources(
-    status: Optional[str] = None,
-    platform: Optional[str] = None,
+    search: Optional[str] = Query(None, description="Search term for platform, type, username, status, or log"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db)
 ):
-    query = db.query(ResourceLog)
-    if status:
-        query = query.filter(ResourceLog.status == status)
-    if platform:
-        query = query.filter(ResourceLog.platform == platform)
-    return query.order_by(ResourceLog.id.desc()).all()
+    query = db.query(Resource)
 
+    if search and search.strip():
+        term = f"%{search.strip().lower()}%"
+        query = query.filter(
+            or_(
+                Resource.platform.ilike(term),
+                Resource.type.ilike(term),
+                Resource.username.ilike(term),
+                Resource.status.ilike(term),
+                Resource.log.ilike(term)
+            )
+        )
 
-@app.get(
-    "/api/platform-users",
-    response_model=List[schemas.PlatformUserResponse],
-    summary="List platform users",
-    description="Retrieve all registered platform users."
-)
-def get_platform_users(
-    platform: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    query = db.query(PlatformUser)
-    if platform:
-        query = query.filter(PlatformUser.platform == platform)
-    return query.order_by(PlatformUser.id.desc()).all()
+    total = query.count()
+    total_pages = math.ceil(total / page_size) if total > 0 else 1
+
+    offset = (page - 1) * page_size
+    items = query.order_by(Resource.id.desc()).offset(offset).limit(page_size).all()
+
+    return schemas.PaginatedResourceResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages
+    )
