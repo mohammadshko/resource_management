@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit Resource - Resource Management</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="brand">
+                <div class="brand-icon">R</div>
+                <h1>Resource Management System</h1>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="active">Submit Form</a>
+                <a href="/list">Inserted Data</a>
+                <a href="/docs" target="_blank">Swagger Docs</a>
+                <a href="/redoc" target="_blank">ReDoc</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container-fluid" style="max-width: 600px; margin: 0 auto; padding-top: 20px;">
+        <div class="card">
+            <div class="card-header">
+                <h2>Submit New Resource</h2>
+            </div>
+            <div id="alertBox" style="display: none; padding: 12px; margin-bottom: 20px; border-radius: 8px; font-weight: 500; font-size: 0.9rem;"></div>
+            <form id="resourceForm">
+                <div class="form-group">
+                    <label for="platform">Platform</label>
+                    <select id="platform" name="platform" required>
+                        <option value="" disabled selected>Select a platform</option>
+                        <option value="Telegram">Telegram</option>
+                        <option value="Twitter">Twitter</option>
+                        <option value="Instagram">Instagram</option>
+                        <option value="YouTube">YouTube</option>
+                        <option value="Discord">Discord</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="type">Resource Type</label>
+                    <select id="type" name="type" required>
+                        <option value="" disabled selected>Select resource type</option>
+                        <option value="channel">channel</option>
+                        <option value="group">group</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="username">Username / Identifier</label>
+                    <input type="text" id="username" name="username" placeholder="e.g. dev_channel_123" required>
+                </div>
+                <button type="submit" class="btn" style="width: 100%;">Submit Resource</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('resourceForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const platform = document.getElementById('platform').value;
+            const type = document.getElementById('type').value;
+            const username = document.getElementById('username').value;
+            const alertBox = document.getElementById('alertBox');
+
+            try {
+                const res = await fetch('/api/resources', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ platform, type, username })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    alertBox.style.display = 'block';
+                    if (data.is_duplicate) {
+                        alertBox.style.backgroundColor = '#fef3c7';
+                        alertBox.style.color = '#92400e';
+                        alertBox.textContent = `Warning: Duplicate resource entry already exists in database for ${username} on ${platform}! (No new row inserted)`;
+                    } else {
+                        alertBox.style.backgroundColor = '#d1fae5';
+                        alertBox.style.color = '#065f46';
+                        alertBox.textContent = `Successfully submitted resource for ${username} on ${platform}!`;
+                        document.getElementById('resourceForm').reset();
+                    }
+                } else {
+                    const errData = await res.json();
+                    alertBox.style.display = 'block';
+                    alertBox.style.backgroundColor = '#fee2e2';
+                    alertBox.style.color = '#991b1b';
+                    alertBox.textContent = `Error: ${JSON.stringify(errData.detail || 'Submission failed')}`;
+                }
+            } catch (err) {
+                console.error('Submit error:', err);
+                alertBox.style.display = 'block';
+                alertBox.style.backgroundColor = '#fee2e2';
+                alertBox.style.color = '#991b1b';
+                alertBox.textContent = 'Network or server error occurred.';
+            }
+        });
+    </script>
+</body>
+</html>

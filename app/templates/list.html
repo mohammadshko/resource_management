@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inserted Data - Resource Management</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .filter-select {
+            padding: 8px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            background-color: #fff;
+            color: #1e293b;
+            outline: none;
+            cursor: pointer;
+        }
+        .filter-select:focus {
+            border-color: #3b82f6;
+        }
+        .platform-icon-img {
+            width: 28px;
+            height: 28px;
+            vertical-align: middle;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="brand">
+                <div class="brand-icon">R</div>
+                <h1>Resource Management System</h1>
+            </div>
+            <div class="nav-links">
+                <a href="/">Submit Form</a>
+                <a href="/list" class="active">Inserted Data</a>
+                <a href="/docs" target="_blank">Swagger Docs</a>
+                <a href="/redoc" target="_blank">ReDoc</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container-fluid" style="padding-top: 10px;">
+        <div class="card">
+            <div class="card-header" style="flex-direction: column; align-items: stretch; gap: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <h2>Inserted Resources</h2>
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="searchInput" placeholder="Search resources...">
+                    </div>
+                </div>
+
+                <!-- Filters & Sort Bar -->
+                <div class="filter-bar">
+                    <div>
+                        <label for="platformFilter" style="font-size: 0.85rem; font-weight: 600; color: #475569; margin-right: 4px;">Platform:</label>
+                        <select id="platformFilter" class="filter-select">
+                            <option value="">All Platforms</option>
+                            <option value="Telegram">Telegram</option>
+                            <option value="Twitter">Twitter</option>
+                            <option value="Instagram">Instagram</option>
+                            <option value="YouTube">YouTube</option>
+                            <option value="Discord">Discord</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="statusFilter" style="font-size: 0.85rem; font-weight: 600; color: #475569; margin-right: 4px;">Status:</label>
+                        <select id="statusFilter" class="filter-select">
+                            <option value="">All Statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="done">Done</option>
+                            <option value="error">Error</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="sortSelect" style="font-size: 0.85rem; font-weight: 600; color: #475569; margin-right: 4px;">Sort By:</label>
+                        <select id="sortSelect" class="filter-select">
+                            <option value="created_at:desc">Created Date (Newest)</option>
+                            <option value="created_at:asc">Created Date (Oldest)</option>
+                            <option value="platform:asc">Platform (A-Z)</option>
+                            <option value="status:asc">Status</option>
+                            <option value="username:asc">Username (A-Z)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="full-screen-table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Platform</th>
+                            <th>Type</th>
+                            <th>Username</th>
+                            <th>Status</th>
+                            <th>Process Time</th>
+                            <th>Created Date</th>
+                            <th>Log</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resourceLogsTable">
+                        <tr><td colspan="8">Loading inserted resources...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="pagination-container">
+                <div class="pagination-info">
+                    Showing <span id="showingStart">0</span> to <span id="showingEnd">0</span> of <span id="totalItems">0</span> items
+                    (Page <span id="currentPage">1</span> of <span id="totalPages">1</span>)
+                </div>
+
+                <div class="pagination-controls">
+                    <label for="pageSizeSelect" style="margin-right: 5px;">Per page:</label>
+                    <select id="pageSizeSelect" class="pageSize-select">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                    </select>
+
+                    <button id="prevBtn" class="pagination-btn" disabled>&laquo; Previous</button>
+                    <button id="nextBtn" class="pagination-btn" disabled>Next &raquo;</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+        let currentPageSize = 10;
+        let searchTimeout = null;
+
+        const platformIconFiles = {
+            'Telegram': '/static/icons/telegram.svg',
+            'Twitter': '/static/icons/twitter.svg',
+            'Instagram': '/static/icons/instagram.svg',
+            'YouTube': '/static/icons/youtube.svg',
+            'Discord': '/static/icons/discord.svg'
+        };
+
+        function formatDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            const d = new Date(dateStr);
+            return d.toLocaleString();
+        }
+
+        function renderTable(items, page, pageSize) {
+            const tbody = document.getElementById('resourceLogsTable');
+            if (!items || items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #64748b; padding: 20px;">No matching resources found.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = items.map((l, idx) => {
+                const globalIndex = (page - 1) * pageSize + idx;
+                const iconPath = platformIconFiles[l.platform];
+                const logoHtml = iconPath
+                    ? `<img src="${iconPath}" alt="${l.platform}" title="${l.platform}" class="platform-icon-img">`
+                    : `<span class="badge" style="background:#e2e8f0; color:#334155;">${l.platform}</span>`;
+
+                const statusClass = l.status === 'done' ? 'badge-done' : (l.status === 'error' ? 'badge-error' : 'badge-pending');
+                const processTime = l.process_time !== null ? l.process_time + 's' : 'None';
+                const logDisplay = l.log ? `<pre class="log-output">${l.log}</pre>` : '<span style="color: #94a3b8; font-style: italic;">Empty</span>';
+                return `
+                    <tr>
+                        <td><strong>${globalIndex}</strong></td>
+                        <td>${logoHtml}</td>
+                        <td>${l.type}</td>
+                        <td>${l.username}</td>
+                        <td><span class="badge ${statusClass}">${l.status}</span></td>
+                        <td>${processTime}</td>
+                        <td style="white-space: nowrap; font-size: 0.85rem; color: #475569;">${formatDate(l.created_at)}</td>
+                        <td>${logDisplay}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function fetchResourceLogs() {
+            const searchTerm = document.getElementById('searchInput').value.trim();
+            const platformVal = document.getElementById('platformFilter').value;
+            const statusVal = document.getElementById('statusFilter').value;
+            const sortVal = document.getElementById('sortSelect').value;
+
+            const [sortBy, sortOrder] = sortVal.split(':');
+
+            const params = new URLSearchParams({
+                page: currentPage,
+                page_size: currentPageSize,
+                sort_by: sortBy,
+                sort_order: sortOrder
+            });
+
+            if (searchTerm) params.append('search', searchTerm);
+            if (platformVal) params.append('platform', platformVal);
+            if (statusVal) params.append('status', statusVal);
+
+            try {
+                const res = await fetch(`/api/resources?${params.toString()}`);
+                const data = await res.json();
+
+                renderTable(data.items, data.page, data.page_size);
+
+                // Update pagination controls
+                document.getElementById('totalItems').textContent = data.total;
+                document.getElementById('currentPage').textContent = data.page;
+                document.getElementById('totalPages').textContent = data.total_pages;
+
+                const start = data.total === 0 ? 0 : (data.page - 1) * data.page_size + 1;
+                const end = Math.min(data.page * data.page_size, data.total);
+                document.getElementById('showingStart').textContent = start;
+                document.getElementById('showingEnd').textContent = end;
+
+                document.getElementById('prevBtn').disabled = data.page <= 1;
+                document.getElementById('nextBtn').disabled = data.page >= data.total_pages;
+            } catch (err) {
+                console.error('Failed to fetch resources from API:', err);
+                document.getElementById('resourceLogsTable').innerHTML =
+                    '<tr><td colspan="8" style="text-align: center; color: #ef4444;">Failed to load data from server.</td></tr>';
+            }
+        }
+
+        // Debounced search
+        document.getElementById('searchInput').addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                currentPage = 1;
+                fetchResourceLogs();
+            }, 300);
+        });
+
+        // Filter events
+        document.getElementById('platformFilter').addEventListener('change', () => {
+            currentPage = 1;
+            fetchResourceLogs();
+        });
+
+        document.getElementById('statusFilter').addEventListener('change', () => {
+            currentPage = 1;
+            fetchResourceLogs();
+        });
+
+        document.getElementById('sortSelect').addEventListener('change', () => {
+            currentPage = 1;
+            fetchResourceLogs();
+        });
+
+        // Page size selection
+        document.getElementById('pageSizeSelect').addEventListener('change', (e) => {
+            currentPageSize = parseInt(e.target.value, 10);
+            currentPage = 1;
+            fetchResourceLogs();
+        });
+
+        // Previous button
+        document.getElementById('prevBtn').addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                fetchResourceLogs();
+            }
+        });
+
+        // Next button
+        document.getElementById('nextBtn').addEventListener('click', () => {
+            currentPage++;
+            fetchResourceLogs();
+        });
+
+        // Initial load
+        fetchResourceLogs();
+    </script>
+</body>
+</html>
